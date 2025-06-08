@@ -12,9 +12,6 @@ def treinar():
     X = regensburg_pediatric_appendicitis.data.features
     y = regensburg_pediatric_appendicitis.data.targets
     df = pd.concat([X, y], axis=1)
-    
-    # salvar o DataFrame normalizado
-    df.to_csv('df_normalizado.csv', index=False)
 
     df = normalizar_targets(df)
 
@@ -50,6 +47,8 @@ def normalizar(df: pd.DataFrame) -> pd.DataFrame:
 
     initial_columns = df_features.shape[1]
     df_features = df_features.loc[:, df_features.isnull().mean() < 0.5]
+    
+    df_features.to_csv('df_original.csv', index=False)
 
     map_columns = {
         'Appendix_on_US',
@@ -108,11 +107,27 @@ def normalizar(df: pd.DataFrame) -> pd.DataFrame:
                     f"{df_features[col].dtype} e não pôde ser convertida. "
                     "Nenhuma imputação de mediana feita para esta coluna."
                 )
+                
+    numerical_cols = [
+        'Age',
+        'BMI',
+        'Height',
+        'Weight',
+        'Length_of_Stay',
+        'Appendix_Diameter',
+        'Body_Temperature',
+        'WBC_Count',
+        'Neutrophil_Percentage',
+        'RBC_Count',
+        'Hemoglobin',
+        'RDW',
+        'Thrombocyte_Count',
+        'CRP'
+    ]
 
     df_features = df_features.dropna()
     df_targets = df_targets.loc[df_features.index]
 
-    numerical_cols = [col for col in df_features.columns if pd.api.types.is_numeric_dtype(df_features[col])]
     normalizador = preprocessing.MinMaxScaler()
     modelo_normalizador_num = normalizador.fit(df_features[numerical_cols])
     dump(modelo_normalizador_num, open('./models/modelo_normalizador_num.pkl', 'wb'))
@@ -124,6 +139,9 @@ def normalizar(df: pd.DataFrame) -> pd.DataFrame:
         [df_features.reset_index(drop=True), df_targets.reset_index(drop=True)],
         axis=1
     )
+    
+    df_processed.to_csv('df_normalizado.csv', index=False)
+    
     return df_processed
 
 
@@ -172,16 +190,16 @@ def treinar_modelo(df: pd.DataFrame, column: str):
     df_classes = df[column]
 
     atr_train, atr_test, cls_train, cls_test = train_test_split(
-        df_atributos, df_classes, test_size=0.3, random_state=42
+        df_atributos, df_classes, test_size=0.2, random_state=42
     )
 
-    n_estimators = [100, 200, 300]
-    max_depth = [5, 10, 15, 20]
-    min_samples_split = [2, 5, 10]
-    min_samples_leaf = [1, 2, 4]
-    max_features = ['sqrt', 'log2']
+    n_estimators = [100, 200, 300, 400, 500]
+    max_depth = [None, 5, 10, 15, 20, 25, 30]
+    min_samples_split = [2, 5, 10, 15]
+    min_samples_leaf = [1, 2, 4, 6]
+    max_features = ['sqrt', 'log2', None]
     bootstrap = [True, False]
-    criterion = ['gini', 'entropy', 'log_loss']
+    criterion = ['gini', 'entropy']
 
     forest_grid = {
         'n_estimators': n_estimators,
@@ -190,29 +208,36 @@ def treinar_modelo(df: pd.DataFrame, column: str):
         'min_samples_leaf': min_samples_leaf,
         'max_features': max_features,
         'bootstrap': bootstrap,
-        'criterion': criterion
+        'criterion': criterion,
+        'class_weight': ['balanced', None]
     }
 
     forest_hyperparameters = RandomizedSearchCV(
         estimator=RandomForestClassifier(),
         param_distributions=forest_grid,
-        n_iter=10,
+        n_iter=50,
         cv=5,
         verbose=1,
-        random_state=42
+        random_state=42,
+        n_jobs=-1
     )
 
     forest_hyperparameters.fit(atr_train, cls_train)
 
+    print(f"\nMelhores parâmetros para {column}:")
+    print(forest_hyperparameters.best_params_)
+
     forest_final = RandomForestClassifier(**forest_hyperparameters.best_params_)
     forest_model = forest_final.fit(df_atributos, df_classes)
 
-    scoring = ['precision_macro', 'recall_macro']
+    scoring = ['accuracy', 'precision_macro', 'recall_macro', 'f1_macro']
     scores_cross = cross_validate(forest_final, df_atributos, df_classes, cv=10, scoring=scoring)
 
-    print(f"Scores de validação cruzada (Target: {column}) :")
-    print("  Precisão média:", scores_cross['test_precision_macro'].mean())
-    print("  Recall médio:   ", scores_cross['test_recall_macro'].mean())
+    print(f"\nScores de validação cruzada (Target: {column}):")
+    print(f"  Acurácia média: {scores_cross['test_accuracy'].mean():.2%}")
+    print(f"  Precisão média: {scores_cross['test_precision_macro'].mean():.2%}")
+    print(f"  Recall médio:   {scores_cross['test_recall_macro'].mean():.2%}")
+    print(f"  F1-score médio: {scores_cross['test_f1_macro'].mean():.2%}")
 
     salvar_modelo(column, forest_model)
 
