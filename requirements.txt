@@ -1,0 +1,5 @@
+questionary
+scikit-learn
+imbalanced-learn
+ucimlrepo
+pandas

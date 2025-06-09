@@ -8,7 +8,6 @@ from pickle import dump
 import pandas as pd
 
 def treinar():
-    # Confirmação antes de iniciar
     confirm = questionary.confirm(
         "O treinamento de modelos pode levar algum tempo e irá sobrescrever os arquivos existentes. Deseja continuar?",
         default=False
