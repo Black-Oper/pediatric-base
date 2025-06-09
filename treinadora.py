@@ -1,3 +1,4 @@
+import questionary
 from sklearn.model_selection import RandomizedSearchCV, train_test_split, cross_validate
 from sklearn.ensemble import RandomForestClassifier
 from imblearn.over_sampling import SMOTE
@@ -6,8 +7,17 @@ from sklearn import preprocessing
 from pickle import dump
 import pandas as pd
 
-
 def treinar():
+    # Confirmação antes de iniciar
+    confirm = questionary.confirm(
+        "O treinamento de modelos pode levar algum tempo e irá sobrescrever os arquivos existentes. Deseja continuar?",
+        default=False
+    ).ask()
+
+    if not confirm:
+        print("Treinamento cancelado pelo usuário.")
+        return
+    
     regensburg_pediatric_appendicitis = fetch_ucirepo(id=938)
     X = regensburg_pediatric_appendicitis.data.features
     y = regensburg_pediatric_appendicitis.data.targets
@@ -48,7 +58,7 @@ def normalizar(df: pd.DataFrame) -> pd.DataFrame:
     initial_columns = df_features.shape[1]
     df_features = df_features.loc[:, df_features.isnull().mean() < 0.5]
     
-    df_features.to_csv('df_original.csv', index=False)
+    df_features.to_csv('./data/df_original.csv', index=False)
 
     map_columns = {
         'Appendix_on_US',
@@ -140,7 +150,7 @@ def normalizar(df: pd.DataFrame) -> pd.DataFrame:
         axis=1
     )
     
-    df_processed.to_csv('df_normalizado.csv', index=False)
+    df_processed.to_csv('./data/df_normalizado.csv', index=False)
     
     return df_processed
 
